@@ -1,0 +1,1 @@
+#noise, resolution, masking, backgrounds

@@ -1,0 +1,1 @@
+#convergence, degeneracy, failure modes

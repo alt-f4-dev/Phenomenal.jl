@@ -1,0 +1,1 @@
+#masking, background subtraction, normalization
