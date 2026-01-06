@@ -1,6 +1,6 @@
 module PhunnyBridge
-include("../Core/Types.jl")
-using .Types
+#include("../Core/Types.jl")
+using ...Core.Types
 #Import necessary packages
 using StaticArrays
 import Phunny: onephonon_dsf

@@ -1,6 +1,6 @@
 module Topology
 using LinearAlgebra
-using ..Types
+using ...Core.Types
 #-------------------------#
 # Distance Specifications #
 #-------------------------#

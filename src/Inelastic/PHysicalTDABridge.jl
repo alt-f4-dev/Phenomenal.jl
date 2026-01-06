@@ -3,7 +3,7 @@ module PhenomenalPHysicalTDABridge
 using Statistics
 
 import PHysicalTDA
-import Phenomenal.Core.Types: IntensityData, StaticFeatureSpec, validate_static_invariants!
+using ..Core.Types: IntensityData, StaticFeatureSpec, validate_static_invariants!
 
 export compute_static_topology
 

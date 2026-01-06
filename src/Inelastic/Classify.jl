@@ -5,7 +5,7 @@ using Statistics
 using SparseArrays
 using Arpack
 
-using ..Types
+using ...Core.Types
 using ..Topology
 #import .Topology: topology_distance
 
