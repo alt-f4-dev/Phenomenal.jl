@@ -1,21 +1,32 @@
 module Phenomenal
-#module assembly (only non-empty files included)
+#----------------------#
+# Core Types/Contracts #
+#----------------------#
 include("Core/Types.jl")
 #
+#--------------------#
+# Forward Simulators #
+#--------------------#
 include("Forward/PhunnyBridge.jl")
 #
+#--------------------#
+# Inelastic Analysis #
+#--------------------#
 include("Inelastic/Topology.jl")
 include("Inelastic/Classify.jl")
 #
-#Public API
-using .Types
+#------------#
+# Import API #
+#------------#
+using .Types: IntensityData, FeatureSpec, StaticFeatureSpec, TopologyMetricSpec,
+              QPresult, ModelHypothesis, QuerySpec
+using .PhunnyBridge: simulate
 #
-using .PhunnyBridge
-#
-using .Classify
-using .Topology
-#
-export IntensityData, FeatureSpec, StaticFeatureSpec, TopologyMetricSpec, QPresult, ModelHypothesis, QuerySpec
+#------------#
+# Public API #
+#------------#
+export IntensityData, FeatureSpec, StaticFeatureSpec, TopologyMetricSpec
+export QPresult, ModelHypothesis, QuerySpec
 export classify
 """
     classify(data, fs, metric; k, nclusters)
@@ -26,8 +37,8 @@ Returns QPresult.
 function classify(
         data::Vector{IntensityData}, fs::FeatureSpec, 
         metric::TopologyMetricSpec; k::Int=10, nclusters::Int)::QPresult
-    features = extract_features.(data, Ref(fs))
-    return classifyQP(features, metric; k=k, nclusters=nclusters)
+    features = Topology.extract_features.(data, Ref(fs))
+    return Classify.classifyQP(features, metric; k=k, nclusters=nclusters)
 end
 """
     classify(mh, qs, gs, metric; k, nclusters)
@@ -39,8 +50,8 @@ function classify(
         mh::ModelHypothesis, qs::QuerySpec,
         fs::FeatureSpec, metric::TopologyMetricSpec;
         k::Int=10, nclusters::Int)::QPresult
-    I = simulate(mh, qs)
+    I = PhunnyBridge.simulate(mh, qs)
     return classify([I], fs, metric; k=k, nclusters=nclusters)
 end
 #
-end #module Phenomenal
+end #module 
