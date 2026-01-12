@@ -70,8 +70,9 @@ function extract_features(I::IntensityData, spec::FeatureSpec)::FeatureBundle
     st === nothing && error("StaticFeatureSpec required!")
     invs, meta = compute_static_topology(I, st)
     validate_static_invariants!(invs,st)
-    static_bundle = StaticFeatureBundle(invs, nothing)
-    return FeatureBundle(static_bundle, nothing, (static=st, dynamic=nothing), 
+    static_bundle = Types.StaticFeatureBundle(invs, nothing)
+    return Types.FeatureBundle(static_bundle, nothing, 
+                               (static=st, dynamic=nothing), 
                          Dict(:source=>get(I.meta, :source, :unknown), 
                               :topology=>meta))
 end

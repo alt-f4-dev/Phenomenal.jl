@@ -5,9 +5,9 @@ using Statistics
 using SparseArrays
 using Arpack
 
-using ...Core.Types
-using ..Topology
-#import .Topology: topology_distance
+using ...Core.Types: TopologyMetricSpec, FeatureBundle, STATIC_INVARIANT_SCHEMA,ScalarInvariant, VectorInvariant, QPresult
+
+using ..Topology: topology_distance, L2Norm, AbsoluteDistance
 
 export classifyQP
 #------------------------------------#
@@ -88,7 +88,7 @@ function kmeans_assign(X::Matrix{Float64}, k::Int; maxiter=100)
         for j in 1:k #update
             inds = findall(labels .== j)
             #!isempty(inds) && (centers[j,:] .= mean(X[inds,:], dims=1)) #old
-            !isempty(inds) && (centers[j,:] .= sum(X[inds,:], dims=1)./length(inds))
+            !isempty(inds) && (centers[j,:] .= vec(sum(X[inds,:], dims=1))./length(inds))
         end
     end
     return labels
@@ -97,12 +97,17 @@ end
 #calculate neighborhood label entropy for each sample i, computed over
 #k-nearest neighbors (excluding self). Uses natural log, so H ∈ [0, log(nclasses)].
 function knn_entropy(labels::Vector{Int}, D::Matrix{Float64}, k::Int)
-    N=length(labels); H=zeros(Float64,N); ks = 1:k+1
+    N=length(labels); H=zeros(Float64,N); ks = 1:k+1; nclusters=maximum(labels)
     Threads.@threads for i in 1:N
         idx = partialsortperm(D[i,:], ks)#inclue self (first entry)
         neighbors = labels[idx[2:end]]   #exclude self (after first entry)
-        p = counts(neighbors) ./ length(neighbors) #label distribution
-        H[i] = -sum(p .* log.(p .+ eps()))#Shannon-entropy
+        #p = counts(neighbors) ./ length(neighbors) #label distribution (old: StatsBase depend.)
+        hist = zeros(Int,nclusters)
+        @inbounds for lbl in neighbors; hist[lbl] += 1; end
+        invk = 1/length(neighbors); hi = 0.0
+        @inbounds for c in hist; if c > 0; p=c*invk; hi -= p*log(p); end; end
+        #H[i] = -sum(p .* log.(p .+ eps()))#Shannon-entropy (old: StatBase depend.)
+        H[i] = hi
     end
     return H
 end
@@ -178,7 +183,7 @@ function classifyQP(
                                    :threshold=>threshold),
                 :settings=>Dict(:metric=>metric, :nclusters=>nclusters, :k=>k)
                )
-    return QPresult(labels, confidence, eigvals, meta, k)
+    return QPresult(labels, confidence, eigenvals, meta, k)
 end
 #
 end #module

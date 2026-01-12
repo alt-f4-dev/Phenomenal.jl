@@ -1,9 +1,9 @@
-module PhenomenalPHysicalTDABridge
+module PHysicalTDABridge
 
 using Statistics
 
 import PHysicalTDA
-using ..Core.Types: IntensityData, StaticFeatureSpec, validate_static_invariants!
+using ...Core.Types: IntensityData, StaticFeatureSpec, validate_static_invariants!
 
 export compute_static_topology
 

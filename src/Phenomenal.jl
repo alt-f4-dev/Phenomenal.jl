@@ -21,6 +21,7 @@ end
 # Inelastic Analysis #
 #--------------------#
 module Inelastic
+include("Inelastic/PHysicalTDABridge.jl")
 include("Inelastic/Topology.jl")
 include("Inelastic/Classify.jl")
 end
