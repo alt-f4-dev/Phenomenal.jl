@@ -1,6 +1,7 @@
 module Topology
 using LinearAlgebra
 using ...Core.Types
+using ..PHysicalTDABridge: compute_static_topology
 #-------------------------#
 # Distance Specifications #
 #-------------------------#
