@@ -4,8 +4,8 @@ export QuerySpec, ModelHypothesis
 export AbstractFeatureDistance, AbstractTopologyMetric, TopologyMetricSpec
 export feature_distance, topology_distance, extract_features
 export InvariantKind, ScalarInvariant, VectorInvariant
-export STATIC_INVARIANT_SCHEMA 
-export required_static_keys, validate_static_invariants!
+export STATIC_INVARIANT_SCHEMA, required_static_keys, validate_static_invariants!
+export DYNAMIC_INVARIANT_SCHEMA, required_dynamic_keys, validate_dynamic_invariants!
 export QPresult
 #-------------------------------------------------------------#
 #                   Intensity Data Structure                  # 
@@ -53,8 +53,6 @@ struct StaticFeatureSpec
 end
 
 struct DynamicFeatureSpec
-    qpath::Any  #explicit path descriptor
-    ωaxis::Tuple{Float64,Float64}
     invariants::Vector{Symbol} #:bandcount, :bandweights, etc.
     params::Dict{Symbol,Any}
 end
@@ -68,9 +66,26 @@ struct StaticFeatureBundle
     invariants::Dict{Symbol,Any}
     diagrams::Union{Nothing,Any}
 end
+"""
+    struct DynamicFeatureBundle
+
+Container for dynamic (spectral) features extracted from a single IntensityData object.
+
+- `bands`:
+    Semantic, orientation-aware intermediate representation of band structure
+    (e.g. autosplitbands output, persistence-guided band partitions).
+    This field is NOT used directly by metric or clustering code.
+
+- `invariants`:
+    Metric-safe dynamic invariants derived from `bands`.
+    Values must be scalar or fixed-length vectors, suitable for distance computation.
+
+Users should not need to worry about these details. This information is for developers.
+If a user finds themselves working with this, please reach out to contribute. 
+"""
 struct DynamicFeatureBundle
-    bands::Any
-    invariants::Dict{Symbol,Any}
+    bands::Dict{Symbol,Any} #semantic/intermediate layer
+    invariants::Dict{Symbol,Any} #metric-facing invariants
 end
 """
     struct FeatureBundle
@@ -215,6 +230,10 @@ abstract type InvariantKind end
 struct ScalarInvariant <: InvariantKind end
 struct VectorInvariant <: InvariantKind end
 
+#----------------------------------------#
+# Static Invariants: Persistent Homology #
+# features extracted from I(q,ω).        #
+#----------------------------------------#
 const STATIC_INVARIANT_SCHEMA = Dict{Symbol,InvariantKind}(:betti0 => VectorInvariant(), 
                                                            :betti1 => VectorInvariant(),
                                                            :entropy0 => ScalarInvariant(), 
@@ -222,7 +241,7 @@ const STATIC_INVARIANT_SCHEMA = Dict{Symbol,InvariantKind}(:betti0 => VectorInva
 
 function required_static_keys(spec::StaticFeatureSpec)
     keys = Symbol[]
-    for p in spec.dims
+    for p in [0,1]
         if :betti in spec.invariants
             push!(keys, Symbol(:betti,p))
         end
@@ -252,6 +271,76 @@ function validate_static_invariants!(invs::Dict{Symbol,Any}, spec::StaticFeature
     end
     return nothing
 end
+#---------------------------------------#
+# Dynamic Invariants: Spectral dynamics #
+# extracted from I(q,ω) via PH-guided   #
+# band-segmentation + summaries.        #
+#---------------------------------------#
+const DYNAMIC_INVARIANT_SCHEMA = Dict{Symbol,InvariantKind}(:nbands=>ScalarInvariant(),
+                                                            :BandWeights=>VectorInvariant(),
+                                                            :BandIntensity=>VectorInvariant(),
+                                                            :BandCenters=>VectorInvariant(),
+                                                            :BandWidths=>VectorInvariant(),
+                                                            :BandGaps=>VectorInvariant(),
+                                                            :PerBandPersistence=>VectorInvariant(),
+                                                            :TotalBandPersistence=>ScalarInvariant(),
+                                                            :BandMaxFrac=>ScalarInvariant(),
+                                                            :BandWeightEntropy=>ScalarInvariant(),
+                                                            :BandPersistenceEntropy=>ScalarInvariant(),
+                                                            :BandWeightMax=>ScalarInvariant(),
+                                                            :nbandsCurve=>VectorInvariant(),
+                                                            :BandWeightEntropyCurve=>VectorInvariant(),
+                                                            :BandWeightMaxCurve=>VectorInvariant()
+                                                           )
+#----------------------------------------------------------------------------------------------------#
+#Core Band Structure:
+#  nbands → Number of bands/branches of band-segmented integrated intensity
+#
+#Per-band Intensity / Spectral Summaries: 
+#  BandWeights → Normalized per-band weights
+#  BandIntensity → Absolute integrated per-band intensity
+#  BandCenters → Band center positions
+#  BandWidths → Band widths (spreads)
+#  BandGaps → Spectral gaps between adjacent bands (ordering convention defined in extraction)
+# 
+#Persistent Homology Measures:
+#  PerBandPersistence → Per-band persistence strength (e.g. lifetime)
+#  TotalBandPersistence → Total persistence summed across bands
+#  BandMaxFrac → Ratio of strongest band persistence to total band persistence
+#  BandWeightEntropy → Entropy of normalized band weights (spectral-weight segments)
+#  BandPersistenceEntropy → Entropy of normalized band persistence (topological segments)
+#  BandWeightMax → Maximum normalized band weight (single-mode dominance)
+#
+#
+#Curve-like Measures: (May remove these)
+#  nbandsCurve → q-resolved or ω-resolved band count curve
+#  BandWeightEntropyCurve → q-resolved or ω-resolved entropy curve
+#  BandWeightMaxCurve → q-resolved pr ω-resolved max-weight
+#
+#---------------------------------------------------------------------------------------------------#
+function required_dynamic_keys(spec::DynamicFeatureSpec)
+    return (:nbands, :BandIntensity, :BandWeightEntropy, :BandPersistenceEntropy)
+end
+function validate_dynamic_invariants!(invs::Dict{Symbol,Any}, spec::DynamicFeatureSpec)
+    requirements = required_dynamic_keys(spec)
+    for k in requirements
+        haskey(invs,k) || error("Missing required dynamic invariant: $k")
+    end
+    for (k,kind) in DYNAMIC_INVARIANT_SCHEMA
+        haskey(invs, k) || continue
+        v = invs[k]
+        if kind isa ScalarInvariant
+            v isa Real || error("Dynamic invariant $k must be scalar, got $(typeof(v))!")
+            isfinite(v) || error("Dynamic invariant $k is not finite!")
+        elseif kind isa VectorInvariant
+            v isa AbstractVector || error("Dynamic invariant $k must be a vector, got $(typeof(v))")
+            isempty(v) && error("Dynamic invariant $k is empty!")
+            all(isfinite, v) || error("Dynamic invariant $k contains non-finite elements!")
+        end
+    end
+    return nothing
+end
+
 """
 Quasi-particle classification result container.
 """
