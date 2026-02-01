@@ -67,13 +67,34 @@ end
 #static features only for now
 function extract_features(I::IntensityData, spec::FeatureSpec)::FeatureBundle
     st = spec.static
-    st === nothing && error("StaticFeatureSpec required!")
-    invs, meta = compute_static_topology(I, st)
-    validate_static_invariants!(invs,st)
-    static_bundle = Types.StaticFeatureBundle(invs, nothing)
-    return Types.FeatureBundle(static_bundle, nothing, 
-                               (static=st, dynamic=nothing), 
-                         Dict(:source=>get(I.meta, :source, :unknown), 
-                              :topology=>meta))
+    dy = spec.dynamic
+    if st === nothing && dy === nothing
+        error("At least one StaticFeatureSpec or DynamicFeatureSpec must be given!")
+    end
+    #-----------------#
+    #Static Extraction#
+    #-----------------#
+    static_bundle = nothing; static_meta = nothing
+    if st !== nothing
+        invs, meta = compute_static_topology(I, st)
+        validate_static_invariants!(invs,st)
+        static_bundle = Types.StaticFeatureBundle(invs, nothing)
+        static_meta = meta
+    end
+    #------------------#
+    #Dynamic Extraction#
+    #------------------#
+    dynamic_bundle=nothing
+    if dy !== nothing
+        @warn "compute_dynamic_features has NOT been implemented in Inelastic.jl"
+        #dyn = compute_dynamic_features(I,dy)
+        #validate_dynamic_invariants!(dyn.invariants,dy)
+        #dynamic_bundle = dyn
+    end
+    return Types.FeatureBundle(static_bundle, dynamic_bundle, 
+                               (static=st, dynamic=dy), 
+                               Dict(:source=>get(I.meta, :source, :unknown), 
+                                    :topology=>static_meta,
+                                    :dynamic=>dy === nothing ? nothing : dy.params))
 end
 end #module
