@@ -1,7 +1,7 @@
 module Topology
 using LinearAlgebra
 using ...Core.Types
-using ..PHysicalTDABridge: compute_static_topology
+using ..PHysicalTDABridge: compute_static_topology, compute_dynamic_topology
 #-------------------------#
 # Distance Specifications #
 #-------------------------#
@@ -15,23 +15,37 @@ struct CosineDistance <: AbstractFeatureDistance end
 struct AbsoluteDistance <: AbstractFeatureDistance end
 struct L2Norm <: AbstractFeatureDistance end
 
-#Scalars: entropy, total persistence, etc...
+#Scalars: entropy, total persistence, nbands, etc...
 function feature_distance(a::Real, b::Real, ::AbsoluteDistance)
     return abs(a - b)
 end
-#Vectors: Betti curvature, etc...
+#Vectors: Betti curvature, band-weight vectors, etc...
 function feature_distance(a::AbstractVector, b::AbstractVector, ::L2Norm)
-    @assert length(a) == length(b)
+    @assert length(a) == length(b) "L2Norm: vector length mismatch ($(length(a)) vs $(length(b)))"
     return norm(a .- b)
 end
-#Persistence Images
+
+function feature_distance(a::AbstractVector, b::AbstractVector, ::L1Distance)
+    @assert length(a) == length(b) "L1Distance: vector length mismatch ($(length(a)) vs $(length(b)))"
+    return sum(abs, a .- b)
+end
+
+#Arrays: Persistence Images
 function feature_distance(a::AbstractArray, b::AbstractArray, ::L2Distance)
     return norm(a .- b)
 end
 
 function feature_distance(a::AbstractArray, b::AbstractArray, ::CosineDistance)
     va = vec(a); vb = vec(b)
-    return 1 - ( dot(va,vb)/(norm(va)*norm(vb)) )
+    denom = norm(va)*norm(vb)
+    denom < eps() && return 1.0 #treat as maximally distant
+    return 1 - ( dot(va,vb)/denom )
+end
+
+
+#Cosine distance for vectors (unused but could be useful)
+function feature_distance(a::AbstractVector, b::AbstractVector, dist::CosineDistance)
+    return feature_distance(reshape(a, :, 1), reshape(b, :, 1), dist::CosineDistance)
 end
 
 #------------------------#
@@ -86,10 +100,9 @@ function extract_features(I::IntensityData, spec::FeatureSpec)::FeatureBundle
     #------------------#
     dynamic_bundle=nothing
     if dy !== nothing
-        @warn "compute_dynamic_features has NOT been implemented in Inelastic.jl"
-        #dyn = compute_dynamic_features(I,dy)
-        #validate_dynamic_invariants!(dyn.invariants,dy)
-        #dynamic_bundle = dyn
+        dyn = compute_dynamic_topology(I,dy)
+        validate_dynamic_invariants!(dyn.invariants,dy)
+        dynamic_bundle = dyn
     end
     return Types.FeatureBundle(static_bundle, dynamic_bundle, 
                                (static=st, dynamic=dy), 

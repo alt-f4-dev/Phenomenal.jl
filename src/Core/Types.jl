@@ -6,6 +6,7 @@ export feature_distance, topology_distance, extract_features
 export InvariantKind, ScalarInvariant, VectorInvariant
 export STATIC_INVARIANT_SCHEMA, required_static_keys, validate_static_invariants!
 export DYNAMIC_INVARIANT_SCHEMA, required_dynamic_keys, validate_dynamic_invariants!
+export required_dynamic_band_keys, validate_dynamic_bands!
 export QPresult
 #-------------------------------------------------------------#
 #                   Intensity Data Structure                  # 
@@ -69,19 +70,27 @@ end
 """
     struct DynamicFeatureBundle
 
-Container for dynamic (spectral) features extracted from a single IntensityData object.
+Container for dynamic fingerprints extracted from a single `IntensityData` object.
 
+Fields
 - `bands`:
-    Semantic, orientation-aware intermediate representation of band structure
-    (e.g. autosplitbands output, persistence-guided band partitions).
-    This field is NOT used directly by metric or clustering code.
+    Default dynamic fingerprint payload. This must contain the four
+    band-segmented integrated intensity outputs produced by
+    `PHysicalTDA.autosplitbands`:
+
+        :splitE_bandIq
+        :splitE_bandIω
+        :splitQ_bandIq
+        :splitQ_bandIω
+
+    It may also contain auxiliary semantic metadata such as projection
+    information, the projected image `Iqω`, the energy axis `ωs`, and the
+    selected orientation used for derived summary invariants.
 
 - `invariants`:
-    Metric-safe dynamic invariants derived from `bands`.
-    Values must be scalar or fixed-length vectors, suitable for distance computation.
-
-Users should not need to worry about these details. This information is for developers.
-If a user finds themselves working with this, please reach out to contribute. 
+    Metric-safe summary invariants derived from one selected orientation of the
+    band representation. These are the values consumed by metric and clustering
+    code.
 """
 struct DynamicFeatureBundle
     bands::Dict{Symbol,Any} #semantic/intermediate layer
@@ -231,7 +240,7 @@ struct ScalarInvariant <: InvariantKind end
 struct VectorInvariant <: InvariantKind end
 
 #----------------------------------------#
-# Static Invariants: Persistent Homology #
+# Static Invariants: Persistent Homology # Requires extension
 # features extracted from I(q,ω).        #
 #----------------------------------------#
 const STATIC_INVARIANT_SCHEMA = Dict{Symbol,InvariantKind}(:betti0 => VectorInvariant(), 
@@ -319,21 +328,27 @@ const DYNAMIC_INVARIANT_SCHEMA = Dict{Symbol,InvariantKind}(:nbands=>ScalarInvar
 #
 #---------------------------------------------------------------------------------------------------#
 function required_dynamic_keys(spec::DynamicFeatureSpec)
-    return (:nbands, :BandIntensity, :BandWeightEntropy, :BandPersistenceEntropy)
+    keys = Symbol[:nbands]
+    for k in spec.invariants
+        haskey(DYNAMIC_INVARIANT_SCHEMA, k) || continue
+        k in keys || push!(keys, k)
+    end
+    return Tuple(keys)
 end
+
 function validate_dynamic_invariants!(invs::Dict{Symbol,Any}, spec::DynamicFeatureSpec)
     requirements = required_dynamic_keys(spec)
     for k in requirements
-        haskey(invs,k) || error("Missing required dynamic invariant: $k")
+        haskey(invs, k) || error("Missing required dynamic invariant: $k")
     end
-    for (k,kind) in DYNAMIC_INVARIANT_SCHEMA
+    for (k, kind) in DYNAMIC_INVARIANT_SCHEMA
         haskey(invs, k) || continue
         v = invs[k]
         if kind isa ScalarInvariant
             v isa Real || error("Dynamic invariant $k must be scalar, got $(typeof(v))!")
             isfinite(v) || error("Dynamic invariant $k is not finite!")
         elseif kind isa VectorInvariant
-            v isa AbstractVector || error("Dynamic invariant $k must be a vector, got $(typeof(v))")
+            v isa AbstractVector || error("Dynamic invariant $k must be a vector, got $(typeof(v))!")
             isempty(v) && error("Dynamic invariant $k is empty!")
             all(isfinite, v) || error("Dynamic invariant $k contains non-finite elements!")
         end
@@ -341,6 +356,24 @@ function validate_dynamic_invariants!(invs::Dict{Symbol,Any}, spec::DynamicFeatu
     return nothing
 end
 
+function required_dynamic_band_keys()
+    return (:splitE_bandIq, :splitE_bandIω,
+            :splitQ_bandIq, :splitQ_bandIω )
+end
+
+function validate_dynamic_bands!(bands::Dict{Symbol,Any})
+    for k in required_dynamic_band_keys()
+        haskey(bands, k) || error("Missing required dynamic band payload: $k")
+        A = bands[k]
+        A isa AbstractMatrix || error("Dynamic band payload $k must be a matrix, got $(typeof(A))!")
+        all(isfinite, A) || error("Dynamic band payload $k contains non-finite values!")
+    end
+
+    size(bands[:splitE_bandIq], 1) == size(bands[:splitE_bandIω], 1) || error("splitE band count mismatch between bandIq and bandIω!")
+    size(bands[:splitQ_bandIq], 1) == size(bands[:splitQ_bandIω], 1) || error("splitQ band count mismatch between bandIq and bandIω!")
+
+    return nothing
+end
 """
 Quasi-particle classification result container.
 """

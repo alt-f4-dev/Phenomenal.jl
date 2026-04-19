@@ -1,6 +1,7 @@
 module PhunnyBridge
-#include("../Core/Types.jl")
+
 using ...Core.Types
+
 #Import necessary packages
 using StaticArrays
 import Phunny: onephonon_dsf
@@ -19,7 +20,8 @@ function simulate(mh::ModelHypothesis, QS::QuerySpec)::IntensityData
     model = mh.structure[:model]
     ϕ = mh.dynamics[:force_constants]
     T = mh.instrument[:temperature]
-    η = mh.instrument[:η, 0.5]
+    #η = mh.instrument[:η, 0.5] #OLD
+    η = get(mh.instrument, :η, 0.5)
 
     #Desired Axes
     qx,qy,qz = QS.axes.h, QS.axes.k, QS.axes.ℓ    
@@ -37,7 +39,9 @@ function simulate(mh::ModelHypothesis, QS::QuerySpec)::IntensityData
     Base.Threads.@threads for idx in 1:length(qlist)
         q = qlist[idx]
         Sω = onephonon_dsf(model,ϕ, q, ω; T=T, η=η)
-        ix, iy, iz = ind2sub(dims,idx)
+        ci = CartesianIndices(dims)[idx]
+        ix, iy, iz = ci[1], ci[2], ci[3]
+        #ix, iy, iz = ind2sub(dims,idx) #OLD
         Sqω[ix,iy,iz,:] .= Sω
     end
     axes = (h=qx, k=qy, ℓ=qz, ω=ω)

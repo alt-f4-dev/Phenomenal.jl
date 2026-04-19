@@ -29,7 +29,7 @@ end
 #------------#
 # Import API #
 #------------#
-using .Core.Types: IntensityData, FeatureSpec, StaticFeatureSpec, 
+using .Core.Types: IntensityData, FeatureSpec, StaticFeatureSpec, DynamicFeatureSpec,
                    TopologyMetricSpec, QPresult, ModelHypothesis, QuerySpec
 
 using .Forward.PhunnyBridge: simulate
@@ -40,7 +40,7 @@ using .Inelastic.Classify: classifyQP
 #------------#
 # Public API #
 #------------#
-export IntensityData, FeatureSpec, StaticFeatureSpec, TopologyMetricSpec
+export IntensityData, FeatureSpec, StaticFeatureSpec, DynamicFeatureSpec, TopologyMetricSpec
 export QPresult, ModelHypothesis, QuerySpec
 export classify
 
@@ -52,9 +52,10 @@ Returns QPresult.
 """
 function classify(
         data::Vector{IntensityData}, fs::FeatureSpec, 
-        metric::TopologyMetricSpec; k::Int=10, nclusters::Int)::QPresult
+        metric::TopologyMetricSpec; k::Int=10, nclusters::Int,
+        σ::Union{Nothing,Float64} = nothing)::QPresult
     features = extract_features.(data, Ref(fs))
-    return classifyQP(features, metric; k=k, nclusters=nclusters)
+    return classifyQP(features, metric; k=k, nclusters=nclusters, σ=σ)
 end
 
 """
@@ -66,9 +67,9 @@ quasi-particles using topology-aware inference.
 function classify(
         mh::ModelHypothesis, qs::QuerySpec,
         fs::FeatureSpec, metric::TopologyMetricSpec;
-        k::Int=10, nclusters::Int)::QPresult
+        k::Int=10, nclusters::Int, σ::Union{Nothing,Float64} = nothing)::QPresult
     I = simulate(mh, qs)
-    return classify([I], fs, metric; k=k, nclusters=nclusters)
+    return classify([I], fs, metric; k=k, nclusters=nclusters, σ=σ)
 end
 
 end #module 
